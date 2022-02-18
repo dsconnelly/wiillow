@@ -1,0 +1,36 @@
+{
+    "name" : "example-rf",
+    "n_iters" : 20,
+    
+    "model" : {
+        "kind" : "random_forest",
+        "scale" : true
+    },
+    
+    "params" : {
+        "regressor__max_depth" : {
+          "name" : "randint",
+          "args" : [8, 13]
+        },
+        "regressor__max_features" : {
+            "name" : "uniform",
+            "args" : [0.2, 0.98]
+        },
+        "regressor__max_samples" : {
+            "name" : "uniform",
+            "args" : [0.2, 0.98]
+        }  
+    },
+    
+    "data" : {
+        "casedir" : "/scratch/dsc7746/cases/control",
+        "n_samples" : 300,
+        "component" : "u",
+        "include" : null,
+        "bounds" : {
+            "time" : null,
+            "lat" : [-15, 15],
+            "lon" : null
+        }
+    }
+}
