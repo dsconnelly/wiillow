@@ -21,10 +21,13 @@ def load_model(config):
         )
     )
 
-def load_params(config):
+def load_params(config, model):
+    names = model.get_params().keys()
+    
     params = {}
     for k, v in config.items():
-        params[k] = globals()[v['name']](*v['args'])
+        name = [x for x in names if x.endswith(k)][0]
+        params[name] = globals()[v['name']](*v['args'])
         
     return params
     

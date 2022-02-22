@@ -56,7 +56,7 @@ def load_data(config):
                 
             fields.append(field)
             
-    for coord in (time, lat, lon):
+    for coord in (lat, lon, time):
         coord = coord.stack(sample=('time', 'lat', 'lon'))[idx].values
         fields.append(coord.reshape(-1, 1))
 

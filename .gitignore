@@ -1,3 +1,6 @@
+*.out
 *.pyc
+*.slurm
 *.ipynb_checkpoints*
+config/*
 data/*

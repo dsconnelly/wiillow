@@ -14,8 +14,13 @@ from wiillow.data import load_data
 
 def main(config):
     base = load_model(config['model'])
-    params = load_params(config['params'])
+    params = load_params(config['params'], base)
+    
     X, Y = load_data(config['data'])
+    days = X[:, -1]
+    X = X[:, :-1]
+    
+    print(f'Loaded {X.shape[0]} training samples.')
     
     name = config['name']
     odir = f'data/{name}'
@@ -32,6 +37,8 @@ def main(config):
     max_iters, n_iters = config['n_iters'], 0
     
     model, best_score = None, -np.inf
+    print(f'Starting {name} training.')
+    
     while n_iters < max_iters:
         n_step = min(10, max_iters - n_iters)
         cv = RandomizedSearchCV(
@@ -64,8 +71,14 @@ def main(config):
         
     print(f'Saving model and datasets to {odir}...')
     joblib.dump(model, f'{odir}/model.pkl')
+    
+    k = [x for x in model.get_params().keys() if x.endswith('n_jobs')][0]
+    model_serial = model.set_params(**{k : 1})
+    joblib.dump(model_serial, f'{odir}/model-serial.pkl')
+    
     np.save(f'{odir}/X.npy', X)
     np.save(f'{odir}/Y.npy', Y)
+    np.save(f'{odir}/days.npy', days)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
