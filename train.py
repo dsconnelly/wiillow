@@ -1,4 +1,5 @@
 import argparse
+import copy
 import json
 import os
 import time
@@ -16,15 +17,44 @@ def main(config):
     base = load_model(config['model'])
     params = load_params(config['params'], base)
     
-    X, Y = load_data(config['data'])
-    days = X[:, -1]
-    X = X[:, :-1]
-    
-    print(f'Loaded {X.shape[0]} training samples.')
+    both = config['data'].get('component', False)
+    if both:
+        config_u = copy.deepcopy(config['data'])
+        config_v = copy.deepcopy(config['data'])
+        
+        config_u['component'] = 'u'
+        config_v['component'] = 'v'
+        
+        config_u['n_samples'] = config['data']['n_samples'] // 2
+        config_v['n_samples'] = config['data']['n_samples'] // 2
+        
+        X_u, Y_u = load_data(config_u)
+        X_v, Y_v = load_data(config_v)
+        
+        days_u = X_u[:, -1]
+        days_v = X_v[:, -1]
+        X_u, X_v = X_u[:, :-1], X_v[:, :-1]
+        
+        X = np.vstack((X_u, X_v))
+        Y = np.vstack((Y_u, Y_v))
+        days = np.concatenate((days_u, days_v))
+        
+    else: 
+        X, Y = load_data(config['data'])    
+        days = X[:, -1]
+        X = X[:, :-1]
     
     name = config['name']
     odir = f'data/{name}'
     os.system(f'mkdir -p {odir}')
+    
+    print(f'Loaded {X.shape[0]} training samples. Saving to {odir}...')
+    
+    np.save(f'{odir}/X.npy', X)
+    np.save(f'{odir}/Y.npy', Y)
+    np.save(f'{odir}/days.npy', days)
+    
+    return
     
     def score(estimator, X, Y):
         Y = estimator.transformer_.transform(Y)
@@ -32,11 +62,14 @@ def main(config):
         
         return -mse(Y, out, squared=False)
     
-    max_hours = 3.5
+    max_hours = config['max_hours']
     start = time.time()
-    max_iters, n_iters = config['n_iters'], 0
     
-    model, best_score = None, -np.inf
+    max_iters = np.float32(config['max_iters'])
+    if not np.isinf(max_iters):
+        max_iters = int(max_iters)
+     
+    model, best_score, n_iters = None, -np.inf, 0
     print(f'Starting {name} training.')
     
     while n_iters < max_iters:
@@ -53,7 +86,7 @@ def main(config):
             model = cv.best_estimator_
             best_score = cv.best_score_
             
-        hours = (time.time() - start) / (60 * 60)
+        hours = (time.time() - start) / 3600
         if hours > max_hours:
             print(f'Terminating after {n_iters} iterations.')
             break
@@ -69,16 +102,12 @@ def main(config):
     for k in params:
         print(f'    {k.split("__")[-1]} : {best_params[k]:.4f}')
         
-    print(f'Saving model and datasets to {odir}...')
+    print(f'Saving model to {odir}...')
     joblib.dump(model, f'{odir}/model.pkl')
     
     k = [x for x in model.get_params().keys() if x.endswith('n_jobs')][0]
     model_serial = model.set_params(**{k : 1})
     joblib.dump(model_serial, f'{odir}/model-serial.pkl')
-    
-    np.save(f'{odir}/X.npy', X)
-    np.save(f'{odir}/Y.npy', Y)
-    np.save(f'{odir}/days.npy', days)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -90,6 +119,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     with open(args.config) as f:
         config = json.load(f)
+        config['name'] = args.config.split('/')[-1][:-5]
         
     print(''.join(['='] * 64))
     main(config)

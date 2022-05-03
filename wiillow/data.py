@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import xarray as xr
 
@@ -6,20 +8,41 @@ def load_data(config):
     if idir is not None:
         X = np.load(f'{idir}/X.npy')
         Y = np.load(f'{idir}/Y.npy')
+        days = np.load(f'{idir}/days.npy').reshape(-1, 1)
         
-        return X, Y
+        return np.hstack((X, days)), Y
     
     casedir = config['casedir']
     n_samples = config['n_samples']
     component = config['component']
-    bounds = config['bounds']
     
-    if config['include'] is None:
-        include = [component, 'T', 'ps']
-    else:
-        include = [component] + config['include']
+    if component == 'both':
+        config_u = copy.deepcopy(config)
+        config_v = copy.deepcopy(config)
 
-    fields = []
+        config_u['component'] = 'u'
+        config_v['component'] = 'v'
+
+        config_u['n_samples'] = config['n_samples'] // 2
+        config_v['n_samples'] = config['n_samples'] // 2
+
+        X_u, Y_u = load_data(config_u)
+        X_v, Y_v = load_data(config_v)
+
+        days_u = X_u[:, -1]
+        days_v = X_v[:, -1]
+        X_u, X_v = X_u[:, :-1], X_v[:, :-1]
+
+        X = np.vstack((X_u, X_v))
+        Y = np.vstack((Y_u, Y_v))
+        days = np.concatenate((days_u, days_v)).reshape(-1, 1)
+        
+        return np.hstack((X, days)), Y
+    
+    bounds = config['bounds']
+    include = [component] + config['include']
+    
+    fields = {}
     with xr.open_dataset(f'{casedir}/inputs.nc', chunks={'time' : 10}) as f:
         dt = f.time.dt
         time = (dt.year * 360) + dt.dayofyear + (dt.hour / 24)
@@ -35,18 +58,24 @@ def load_data(config):
                 bound = (-np.inf, np.inf)
                 
             keep = keep & ((bound[0] <= coord) & (coord <= bound[1]))
-            
+        
         keep = np.where(keep.values.flatten())[0]
+        weights = np.abs(np.cos((np.pi / 180) * lat).values.flatten()[keep])
+        weights = weights / weights.sum()
+        
         idx = np.zeros(np.prod(time.shape)).astype(bool)
-        idx[keep[np.random.permutation(keep.shape[0])[:n_samples]]] = True
+        idx[keep[np.random.choice(
+            keep.shape[0],
+            size=n_samples,
+            replace=False,
+            p=weights
+        )]] = True
         
         for v in include:
-            field = f[v]
-            if v == 'lat':
-                dims = {'time' : f.time, 'lon' : f.lon}
-                field = field.expand_dims(dims, axis=(0, 2))
-
-            field = field.stack(sample=('time', 'lat', 'lon'))
+            if v in ('lat', 'lon', 'time') or v not in f:
+                continue
+                
+            field = f[v].stack(sample=('time', 'lat', 'lon'))
             if field.ndim == 2:
                 field = field.transpose('sample', 'pfull')
                 
@@ -54,13 +83,16 @@ def load_data(config):
             if field.ndim == 1:
                 field = field.reshape(-1, 1)
                 
-            fields.append(field)
+            fields[v] = field
             
-    for coord in (lat, lon, time):
+    if 'shear' in include:
+        fields['shear'] = fields[component][:, :-1] - fields[component][:, 1:]
+            
+    for v, coord in zip(('lat', 'lon', 'time'), (lat, lon, time)):
         coord = coord.stack(sample=('time', 'lat', 'lon'))[idx].values
-        fields.append(coord.reshape(-1, 1))
+        fields[v] = coord.reshape(-1, 1)
 
-    X = np.hstack(fields)
+    X = np.hstack([fields[v] for v in include])
     
     with xr.open_dataset(f'{casedir}/outputs.nc', chunks={'time' : 10}) as g:
         Y = g['gwf_' + component].stack(sample=('time', 'lat', 'lon'))

@@ -33,13 +33,13 @@ def load_params(config, model):
     
 def _make_random_forest(n_jobs):
     return RandomForestRegressor(
-        n_estimators=500,
+        n_estimators=300,
         n_jobs=n_jobs
     )
 
 def _make_gradient_boosted_forest(n_jobs):
-    return RegressorChain(XGBRegressor(
-        n_estimators=25,
+    return XGBRegressor(
+        n_estimators=30,
         base_score=0,
         n_jobs=n_jobs
-    ))
+    )
