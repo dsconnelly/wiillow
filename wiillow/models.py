@@ -39,7 +39,7 @@ def _make_random_forest(n_jobs):
 
 def _make_gradient_boosted_forest(n_jobs):
     return XGBRegressor(
-        n_estimators=30,
+        n_estimators=300,
         base_score=0,
         n_jobs=n_jobs
     )
