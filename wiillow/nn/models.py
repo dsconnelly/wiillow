@@ -1,30 +1,9 @@
 import torch, torch.nn as nn
 
 from wiillow.nn.utils import xavier_init
-from wiillow.utils import inverse_standardize, standardize
-
-class TransformedTargetNet(nn.Module):
-    def __init__(self, model, Y):
-        super().__init__()
-        
-        self.model = model
-        self.means = Y.mean(axis=0)
-        self.stds = Y.std(axis=0)
-        
-    def forward(self, X):
-        return self.model(X)
-        
-    def predict(self, X):
-        return self.inverse_transform(self(X))
-        
-    def transform(self, Y):
-        return standardize(Y, self.means, self.stds)
-    
-    def inverse_transform(self, Y):
-        return inverse_standardize(Y, self.means, self.stds)
 
 class WaveNet(nn.Module):
-    def __init__(self, n_in, n_out, branch_dims=[64, 32, 1]):
+    def __init__(self, n_in, n_out, branch_dims=[64, 32]):
         super().__init__()
         
         self.n_in = n_in
@@ -50,6 +29,7 @@ class WaveNet(nn.Module):
                 args.append(nn.Linear(a, b))
                 args.append(nn.ReLU())
                 
+            args.append(nn.Linear(branch_dims[-1], 1))
             branches.append(nn.Sequential(*args))
             
         self.shared = nn.Sequential(*shared_layers)
@@ -65,7 +45,7 @@ class WaveNet(nn.Module):
         Z = self.shared(X)
         
         out = torch.zeros((X.shape[0], self.n_out))
-        for j in range(self.n_out):
-            out[:, j] = self.branches[j](Z).squeeze()
+        for j, branch in enumerate(self.branches):
+            out[:, j] = branch(Z).squeeze()
             
         return out

@@ -1,8 +1,5 @@
 import torch, torch.nn as nn
 
-def count_params(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
 def approx_loss(model, loader, loss_func, max_batches=100):
     loss, count = 0, 0
     for X, Y in loader:
@@ -13,6 +10,9 @@ def approx_loss(model, loader, loss_func, max_batches=100):
             break
             
     return loss / count
+
+def count_params(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def mse(A, B):
     return ((A - B) ** 2).mean()

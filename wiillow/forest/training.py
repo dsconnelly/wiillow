@@ -9,7 +9,7 @@ def train_boosted_forest(X, Y, param_dists, **kwargs):
     patience = kwargs.get('patience', 5)
     
     n_epochs = 1
-    max_epochs = kwargs.get('max_epochs', 100)
+    max_epochs = kwargs.get('max_epochs', 300)
     max_hours = kwargs.get('max_hours', 22)
     
     best_error = np.inf
@@ -24,23 +24,30 @@ def train_boosted_forest(X, Y, param_dists, **kwargs):
                 params[name] = dist.rvs()
             except AttributeError:
                 continue
-                
+            
+        epoch_start = time.time()
         history = xgb.cv(
             params=params,
             dtrain=data,
             num_boost_round=max_trees,
-            early_stopping_rounds=patience
+            early_stopping_rounds=patience,
+            seed=np.random.seed()
         )['test-rmse-mean']
+        
+        epoch_runtime = time.time() - epoch_start
         
         error = history.iloc[-1]
         n_rounds = len(history)
+        
+        print(f'==== Epoch {n_epochs} ({epoch_runtime:.1f} seconds) ====')
+        print(f'    Error is {error:.3f} after {n_rounds} rounds.')
         
         if error < best_error:
             best_error = error
             best_params = params
             best_n_rounds = n_rounds
             
-            print(f'Epoch {n_epochs}: new best error is {best_error:.3f}')
+            print(f'    This is the new best error.')
             
         hours = (time.time() - training_start) / 3600
         if hours > max_hours or n_epochs == max_epochs:
@@ -48,11 +55,8 @@ def train_boosted_forest(X, Y, param_dists, **kwargs):
             break
             
         n_epochs = n_epochs + 1
-            
-    training_runtime = time.time() - training_start
-    print(f'Training took {(training_runtime / 60):.2f} minutes.')
     
-    print(f'Now training model on full dataset with parameters')
+    print(f'Now training full model with {best_n_rounds} trees and parameters')
     for k, v in best_params.items():
         if isinstance(v, str):
             continue
@@ -60,7 +64,9 @@ def train_boosted_forest(X, Y, param_dists, **kwargs):
         print(f'    {k.split("__")[-1]} : {v:.4f}')
         
     model = xgb.train(best_params, data, best_n_rounds)
-    rmse = np.sqrt(((Y - model.predict(xgb.DMatrix(X))) ** 2).mean())
+    
+    out = model.predict(xgb.DMatrix(X))
+    rmse = np.sqrt(((Y - out) ** 2).mean())
     print(f'Model training RMSE is {rmse:.3f}')
     
     return model
