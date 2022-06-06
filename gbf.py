@@ -36,7 +36,7 @@ def main():
         param_dists,
         max_trees=max_trees,
         max_epochs=np.inf,
-        max_hours=4
+        max_hours=24
     )
     
     model = ScalingWrapper(model, means, stds)

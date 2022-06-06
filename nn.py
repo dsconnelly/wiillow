@@ -26,7 +26,7 @@ def main():
         X_tr, Y_tr_scaled,
         X_va, Y_va_scaled,
         max_epochs=torch.inf,
-        max_hours=4,
+        max_hours=8,
         snapshot_freq=1,
     )
     
